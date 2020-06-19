@@ -7,13 +7,19 @@ using System.Xml.Linq;
 
 namespace Checkout
 {
+    class Item
+    {
+        public string Name;
+        public decimal Price;
+        public int Quantity;
+    }
+
     class Program
     {
         static void Main(string[] args)
         {
-            decimal totalCost = 0;
             const string File = "Products.xml";
-            Dictionary<string, int> purchases = new Dictionary<string, int>();
+            Dictionary<string, Item> purchases = new Dictionary<string, Item>();
 
             XElement root;
             try
@@ -50,10 +56,25 @@ namespace Checkout
                     Console.WriteLine("Product not found. Please enter the name:");
                     name = Console.ReadLine();
                     Console.WriteLine("Please enter the price:");
-                    price = decimal.Parse(Console.ReadLine());
-                    Console.WriteLine("Do you want to add this product to your inventory list? Enter 'y' or 'n'.");
-                    string yorn = Console.ReadLine();
-                    if (yorn.ToLowerInvariant() == "y")
+                    Console.Write("$");
+                    while (true)
+                    {
+                        try
+                        {
+                            price = decimal.Parse(Console.ReadLine());
+                        }
+                        catch (FormatException)
+                        {
+                            Console.WriteLine("Invalid price. Please try again.");
+                            Console.Write("$");
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    Console.WriteLine("Do you want to add this product to your inventory list? y or n...");
+                    if (Console.ReadLine().ToLowerInvariant() == "y")
                     {
                         root.Add(new XElement("Product", new XElement("Barcode", barcode), new XElement("Name", name), new XElement("Price", price)));
                         updates = true;
@@ -66,15 +87,17 @@ namespace Checkout
                     price = decimal.Parse(product.Element("Price").Value);
                 }
 
-                totalCost = Decimal.Round(totalCost + price, 2);
+                // Remember purchases so we can print a receipt.
+                if (purchases.ContainsKey(barcode))
+                {
+                    purchases[barcode].Quantity++;
+                }
+                else
+                {
+                    purchases.Add(barcode, new Item { Name = name, Price = price, Quantity = 1 });
+                }
 
                 Console.WriteLine($"{name} - ${price}. Please scan the next item or enter 't'...");
-
-                // Remember purchases so we can print a receipt.
-                if (purchases.ContainsKey(name))
-                    purchases[name]++;
-                else
-                    purchases.Add(name, 1);
 
                 // Scan the next item.
                 barcode = Console.ReadLine();
@@ -86,36 +109,165 @@ namespace Checkout
                 root.Save(File);
             }
 
-            Console.WriteLine($"Your total today is ${totalCost}. Cash ('c') or credit ('cr')?");
+            // Print a list of items.
+            PrintItems(purchases);
 
-            string paymentType = Console.ReadLine();
-            if (paymentType.ToLowerInvariant() == "c")
-            {
-                // Paying by cash.
-                Console.WriteLine("Enter the tendered amount:");
-                decimal tendered = decimal.Parse(Console.ReadLine());
-                Console.WriteLine($"Change due: ${tendered - totalCost}. Would you like a receipt? 'y' or 'n'...");
-            }
-            else if (paymentType.ToLowerInvariant() == "cr")
-            {
-                // Paying by credit.
-                Console.WriteLine("Please scan the credit card.");
-                string cardNumber = Console.ReadLine();
-                Console.WriteLine($"Charged ${totalCost} to card number {cardNumber}. Would you like a receipt? 'y' or 'n'...");
-            }
+            // Make changes to quantities, if needed.
+            MakeChanges(purchases);
 
-            bool receipt = Console.ReadLine().ToLowerInvariant() == "y";
-            if (receipt)
-            {
-                Console.WriteLine("\nItems purchased:\n");
-                foreach (var purchase in purchases)
-                {
-                    Console.WriteLine($"{purchase.Value} {purchase.Key}");
-                }
-            }
+            // Take payment.
+            decimal totalCost = GetTotal(purchases);
+            TakePayment(totalCost);
 
             Console.WriteLine("\nThank you for shopping at the RNRC store!");
             Console.ReadLine();
+        }
+
+        // Print a list of items purchased.
+        private static void PrintItems(Dictionary<string, Item> purchases)
+        {
+            Console.WriteLine("\nItems purchased:\n");
+            int line = 1;
+            foreach (var purchase in purchases)
+            {
+                Console.WriteLine($"{line++}. {purchase.Value.Name} - quantity {purchase.Value.Quantity}");
+            }
+
+            Console.WriteLine($"\nTotal: ${GetTotal(purchases)}.");
+        }
+
+        private static void TakePayment(decimal totalCost)
+        {
+            Console.WriteLine($"Your total today is ${totalCost}. Cash ('c') or credit ('cr')?");
+
+            string paymentType;
+            do
+            {
+                paymentType = Console.ReadLine();
+
+                if (paymentType.ToLowerInvariant() == "c")
+                {
+                    // Paying by cash.
+                    Console.WriteLine("Enter the tendered amount:");
+                    Console.Write("$");
+
+                    decimal tendered;
+                    while (true)
+                    {
+                        try
+                        {
+                            tendered = decimal.Parse(Console.ReadLine());
+                        }
+                        catch (FormatException)
+                        {
+                            Console.WriteLine("Invalid amount. Please try again.");
+                            Console.Write("$");
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    Console.WriteLine($"Change due: ${tendered - totalCost}.");
+                }
+                else if (paymentType.ToLowerInvariant() == "cr")
+                {
+                    // Paying by credit.
+                    Console.WriteLine("Please scan the credit card.");
+                    string cardNumber = Console.ReadLine();
+                    Console.WriteLine($"Charged ${totalCost} to card number {cardNumber}.");
+                }
+                else
+                {
+                    Console.WriteLine("Invalid entry. Please try again.");
+                }
+            } while (paymentType.ToLowerInvariant() != "c" && paymentType.ToLowerInvariant() != "cr");
+        }
+
+        private static void MakeChanges(Dictionary<string, Item> purchases)
+        {
+            Console.WriteLine("\nWould you like to make any changes? y or n...");
+
+            bool changes = (Console.ReadLine().ToLowerInvariant() == "y");
+            while (changes)
+            {
+                Console.WriteLine("Which line would you like to change?");
+                int changeLine;
+                while (true)
+                {
+                    try { changeLine = int.Parse(Console.ReadLine()); }
+                    catch (FormatException)
+                    {
+                        Console.WriteLine("Unrecognized number. Please try again.");
+                        continue;
+                    }
+
+                    if (changeLine > purchases.Count || changeLine < 1)
+                    {
+                        Console.WriteLine("Invalid line number. Please try again.");
+                        continue;
+                    }
+
+                    // We got a valid line number.
+                    break;
+                }
+
+                int line = 1;
+                string key = null;
+                foreach (var purchase in purchases)
+                {
+                    // Loop till we get to the specified line number.
+                    if (line < changeLine)
+                    {
+                        line++;
+                        continue;
+                    }
+
+                    key = purchase.Key;
+                    Console.WriteLine($"\nEnter the new quantity for '{purchase.Value.Name}'...");
+                    break;
+                }
+
+                int newQuantity;
+                while (true)
+                {
+                    try { newQuantity = int.Parse(Console.ReadLine()); }
+                    catch (FormatException)
+                    {
+                        Console.WriteLine("Unrecognized number. Please try again.");
+                        continue;
+                    }
+
+                    if (newQuantity < 0)
+                    {
+                        Console.WriteLine("Invalid quantity. Please try again.");
+                        continue;
+                    }
+
+                    // We got a valid quantity.
+                    break;
+                }
+
+                purchases[key].Quantity = newQuantity;
+
+                Console.WriteLine($"Quantity updated to {newQuantity}. Would you like to make any other changes? y or n");
+                changes = (Console.ReadLine().ToLowerInvariant() == "y");
+            }
+
+            // Print the list of items.
+            PrintItems(purchases);
+        }
+
+        private static decimal GetTotal(Dictionary<string, Item> purchases)
+        {
+            decimal total = 0;
+
+            foreach (var purchase in purchases)
+            {
+                total += Decimal.Round(purchase.Value.Price * purchase.Value.Quantity, 2);
+            }
+
+            return total;
         }
     }
 }
