@@ -1,5 +1,5 @@
 # Checkout
-A simple app for kids to play storekeeper. All you need is a USB barcode scanner and some items from your pantry!
+A simple app for kids to play shopkeeper. All you need is a USB barcode scanner and some items from your pantry!
 
 The app looks for a file named "Products.xml" in the directory that it's run from. The app is capable of adding new products to the file. Here's an example file:
 
