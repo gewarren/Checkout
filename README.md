@@ -1,6 +1,8 @@
 # Checkout
 A simple, .NET Core console app for kids to play shopkeeper. All you need is a USB barcode scanner and some items from your pantry!
 
+To install, copy the files from the Releases tab to a folder. To run it, double-click the Checkout.exe file.
+
 The app looks for a file named "Products.xml" in the directory that it's run from. The app is capable of adding new products to the file. Here's an example file:
 
 ```xml
